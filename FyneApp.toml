@@ -1,0 +1,18 @@
+[Details]
+Name = "OmniFilePro"
+ID = "com.mahajake.omnifilepro"
+Version = "1.0.0"
+Build = 1
+Icon = "Icon.png"
+
+[[permission]]
+Name = "android.permission.READ_EXTERNAL_STORAGE"
+Reason = "Baca file"
+
+[[permission]]
+Name = "android.permission.WRITE_EXTERNAL_STORAGE"
+Reason = "Simpan file"
+
+[[permission]]
+Name = "android.permission.MANAGE_EXTERNAL_STORAGE"
+Reason = "Akses Internal Storage Android 11+"
