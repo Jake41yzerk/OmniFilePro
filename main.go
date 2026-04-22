@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"os"
+	"path/filepath"
 	"time"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -14,13 +15,13 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// Warna dari icon lu
 var (
-	kuningOmni = color.NRGBA{R: 255, G: 215, B: 0, A: 255} // Kuning emas
-	unguTua = color.NRGBA{R: 138, G: 43, B: 226, A: 255} // Ungu tua
-	unguMuda = color.NRGBA{R: 186, G: 85, B: 211, A: 255} // Ungu muda
+	kuningOmni = color.NRGBA{R: 255, G: 215, B: 0, A: 255}
+	unguTua = color.NRGBA{R: 138, G: 43, B: 226, A: 255}
+	unguMuda = color.NRGBA{R: 186, G: 85, B: 211, A: 255}
 	putih = color.White
-	hitam = color.NRGBA{R: 30, G: 30, B: 30, A: 255}
+	hitam = color.NRGBA{R: 20, G: 20, B: 20, A: 255}
+	currentPath = "/storage/emulated/0" // Path aktif sekarang
 )
 
 func main() {
@@ -28,19 +29,15 @@ func main() {
 	w := a.NewWindow("OmniFilePro")
 	w.Resize(fyne.NewSize(400, 700))
 
-	// 1. SPLASH SCREEN
 	splashBg := canvas.NewRectangle(kuningOmni)
 	splashText := canvas.NewText("OmniFilePro", hitam)
 	splashText.TextSize = 24
 	splashText.TextStyle = fyne.TextStyle{Bold: true}
-	splashText.Alignment = fyne.TextAlignCenter
-	splash := container.NewStack(splashBg, container.NewCenter(splashText))
-	w.SetContent(splash)
+	w.SetContent(container.NewStack(splashBg, container.NewCenter(splashText)))
 
-	// 2 detik kemudian minta izin + masuk app
 	go func() {
 		time.Sleep(2 * time.Second)
-		dialog.ShowConfirm("Izin Diperlukan", "OmniFilePro butuh akses penyimpanan untuk membaca file. Izinkan?",
+		dialog.ShowConfirm("Izin Diperlukan", "OmniFilePro butuh akses penyimpanan. Izinkan?",
 			func(ok bool) {
 				if!ok {
 					a.Quit()
@@ -54,102 +51,135 @@ func main() {
 }
 
 func makeMainUI(w fyne.Window) fyne.CanvasObject {
-	// ===== LATAR PUTIH GLOBAL =====
 	bgPutih := canvas.NewRectangle(putih)
 
-	// ===== HEADER KUNING =====
+	// ===== HEADER KUNING + TOMBOL DRAWER =====
 	headerKuning := canvas.NewRectangle(kuningOmni)
-	headerKuning.Resize(fyne.NewSize(400, 50))
 	headerText := canvas.NewText("OmniFilePro", hitam)
 	headerText.TextStyle = fyne.TextStyle{Bold: true}
-	header := container.NewStack(headerKuning, container.NewCenter(headerText))
+	
+	sidebarOpen := true
+	
+	// ===== SIDEBAR DRAWER GRADASI UNGU =====
+	gradasiUngu := canvas.NewVerticalGradient(unguTua, unguMuda)
+	gradasiUngu.Resize(fyne.NewSize(200, 700))
 
-	// ===== TAB EXPLORER =====
+	buatLabelItem := func(teks string) *fyne.Container {
+		txt := canvas.NewText(teks, putih)
+		txt.TextSize = 14
+		return container.NewHBox(layout.NewSpacer(), txt, layout.NewSpacer())
+	}
+
+	sidebarContent := container.NewVBox(
+		buatLabelItem("MENU"),
+		widget.NewSeparator(),
+		widget.NewButtonWithIcon("Internal", theme.FolderIcon(), func() {
+			currentPath = "/storage/emulated/0"
+			w.SetContent(makeMainUI(w)) // Refresh ke root
+		}),
+		widget.NewButtonWithIcon("Download", theme.DownloadIcon(), func() {
+			currentPath = "/storage/emulated/0/Download"
+			w.SetContent(makeMainUI(w))
+		}),
+		layout.NewSpacer(),
+		widget.NewButtonWithIcon("Pengaturan", theme.SettingsIcon(), func() {}),
+	)
+	
+	sidebar := container.NewStack(gradasiUngu, container.NewPadded(sidebarContent))
+	sidebar.Resize(fyne.NewSize(200, 700))
+
+	// ===== EXPLORER YANG BISA BUKA FOLDER =====
 	var fileData []string
-	files, err := os.ReadDir("/storage/emulated/0")
+	var fileIsDir []bool // Nandain mana folder mana file
+	
+	files, err := os.ReadDir(currentPath)
 	if err!= nil {
-		fileData = []string{"Gagal baca storage. Cek izin di Pengaturan HP."}
+		fileData = []string{"Error: " + err.Error()}
+		fileIsDir = []bool{false}
 	} else {
+		// Tambahin tombol ".." buat back kecuali di root
+		if currentPath!= "/storage/emulated/0" {
+			fileData = append(fileData, "📁..")
+			fileIsDir = append(fileIsDir, true)
+		}
 		for _, f := range files {
 			if f.IsDir() {
 				fileData = append(fileData, "📁 "+f.Name())
+				fileIsDir = append(fileIsDir, true)
 			} else {
 				fileData = append(fileData, "📄 "+f.Name())
+				fileIsDir = append(fileIsDir, false)
 			}
 		}
 	}
 
+	pathLabel := canvas.NewText(currentPath, hitam)
+	pathLabel.TextSize = 12
+
 	fileList := widget.NewList(
 		func() int { return len(fileData) },
-		func() fyne.CanvasObject { return widget.NewLabel("template") },
+		func() fyne.CanvasObject { return canvas.NewText("template", hitam) },
 		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(fileData[i])
+			o.(*canvas.Text).Text = fileData[i]
+			o.Refresh()
 		})
+	
+	// INI LOGIKA BUKA FOLDERNYA BOS
+	fileList.OnSelected = func(id widget.ListItemID) {
+		fileList.Unselect(id) // Biar gak nge-select biru
+		
+		if fileIsDir[id] {
+			selectedName := fileData[id][3:] // Buang emoji "📁 "
+			if selectedName == ".." {
+				// Kalo pencet ".." = balik ke folder parent
+				currentPath = filepath.Dir(currentPath)
+			} else {
+				// Kalo folder biasa = masuk ke dalem
+				currentPath = filepath.Join(currentPath, selectedName)
+			}
+			w.SetContent(makeMainUI(w)) // Refresh UI pake path baru
+		} else {
+			dialog.ShowInformation("File", "Buka file "+fileData[id]+" belum jadi", w)
+		}
+	}
 
+	judulExplorer := canvas.NewText("Explorer", hitam)
+	judulExplorer.TextStyle = fyne.TextStyle{Bold: true}
 	explorerTab := container.NewBorder(
-		widget.NewLabel("Internal Storage"), nil, nil, nil, fileList,
+		container.NewVBox(judulExplorer, pathLabel), nil, nil, nil, fileList,
 	)
 
-	// ===== TAB KOMPRES + TOGGLE =====
-	kompresAktif := widget.NewCheck("Aktifkan Fitur Kompres", func(on bool) {})
-	kompresAktif.SetChecked(true)
-	hapusAsli := widget.NewCheck("Hapus file asli setelah kompres", func(on bool) {})
+	// ===== TAB LAINNYA =====
+	judulKompres := canvas.NewText("Pengaturan Kompres", hitam)
+	judulKompres.TextStyle = fyne.TextStyle{Bold: true}
+	kompresTab := container.NewVBox(judulKompres, widget.NewCheck("Aktifkan Fitur Kompres", func(on bool) {}))
 
-	kompresTab := container.NewVBox(
-		widget.NewLabelWithStyle("Pengaturan Kompres", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		kompresAktif,
-		hapusAsli,
-		widget.NewButton("Pilih File untuk Dikompres", func() {
-			dialog.ShowInformation("Info", "Fitur pilih file belum jadi", w)
-		}),
-	)
-
-	// ===== TAB DUPLIKAT =====
-	duplikatTab := container.NewVBox(
-		widget.NewLabelWithStyle("Cari File Duplikat", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewButtonWithIcon("Mulai Scan Duplikat", theme.SearchIcon(), func() {
-			dialog.ShowInformation("Info", "Fitur scan belum jadi", w)
-		}),
-	)
-
-	// ===== SIDEBAR GRADASI UNGU =====
-	gradasiUngu := canvas.NewLinearGradient(unguTua, unguMuda, 0) // 0 = vertikal
-	sidebarContent := container.NewVBox(
-		widget.NewLabelWithStyle("MENU", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-		widget.NewSeparator(),
-		widget.NewAccordion(
-			widget.NewAccordionItem("Penyimpanan",
-				container.NewVBox(
-					widget.NewButtonWithIcon("Laman Rumah", theme.HomeIcon(), func() {}),
-					widget.NewButtonWithIcon("Internal", theme.FolderIcon(), func() {}),
-				),
-			),
-			widget.NewAccordionItem("Tools",
-				container.NewVBox(
-					widget.NewButtonWithIcon("Analisis", theme.ComputerIcon(), func() {}),
-					widget.NewButtonWithIcon("Bersihkan", theme.DeleteIcon(), func() {}),
-				),
-			),
-		),
-		layout.NewSpacer(),
-		widget.NewButtonWithIcon("Pengaturan", theme.SettingsIcon(), func() {}),
-	)
-	sidebar := container.NewStack(gradasiUngu, container.NewPadded(sidebarContent))
-
-	// ===== GABUNGIN SEMUA =====
 	mainTabs := container.NewAppTabs(
 		container.NewTabItemWithIcon("Explorer", theme.FolderOpenIcon(), explorerTab),
 		container.NewTabItemWithIcon("Kompres", theme.FileImageIcon(), kompresTab),
-		container.NewTabItemWithIcon("Duplikat", theme.ViewRefreshIcon(), duplikatTab),
 	)
 
-	split := container.NewHSplit(sidebar, mainTabs)
-	split.SetOffset(0.35) // Sidebar 35%
+	// ===== DRAWER BUTTON =====
+	kontenArea := container.NewStack(mainTabs)
+	
+	drawerBtn := widget.NewButtonWithIcon("", theme.MenuIcon(), func() {
+		if sidebarOpen {
+			sidebar.Hide()
+			sidebarOpen = false
+		} else {
+			sidebar.Show()
+			sidebarOpen = true
+		}
+	})
 
-	// Stack: Layer 1 putih, Layer 2 header + konten
+	header := container.NewStack(
+		headerKuning,
+		container.NewBorder(nil, nil, container.NewPadded(drawerBtn), nil, container.NewCenter(headerText)),
+	)
+
 	ui := container.NewStack(
 		bgPutih,
-		container.NewBorder(header, nil, nil, nil, split),
+		container.NewBorder(header, nil, sidebar, nil, kontenArea),
 	)
 
 	return ui
