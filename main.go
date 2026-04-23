@@ -1,186 +1,321 @@
 package main
 
 import (
-	"image/color"
-	"os"
-	"path/filepath"
-	"time"
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
-	"fyne.io/fyne/v2/widget"
+    "fmt"
+    "image/color"
+    "os"
+    "os/exec"
+    "path/filepath"
+    "runtime"
+    "time"
+
+    "fyne.io/fyne/v2"
+    "fyne.io/fyne/v2/app"
+    "fyne.io/fyne/v2/canvas"
+    "fyne.io/fyne/v2/container"
+    "fyne.io/fyne/v2/dialog"
+    "fyne.io/fyne/v2/layout"
+    "fyne.io/fyne/v2/theme"
+    "fyne.io/fyne/v2/widget"
 )
 
 var (
-	kuningOmni = color.NRGBA{R: 255, G: 215, B: 0, A: 255}
-	unguTua = color.NRGBA{R: 138, G: 43, B: 226, A: 255}
-	unguMuda = color.NRGBA{R: 186, G: 85, B: 211, A: 255}
-	putih = color.White
-	hitam = color.NRGBA{R: 20, G: 20, B: 20, A: 255}
-	currentPath = "/storage/emulated/0" // Path aktif sekarang
+    kuningOmni  = color.NRGBA{R: 255, G: 215, B: 0, A: 255}
+    kuningTua   = color.NRGBA{R: 255, G: 180, B: 0, A: 255}
+    unguTua     = color.NRGBA{R: 60, G: 0, B: 90, A: 200} // lebih gelap & transparan
+    unguMuda    = color.NRGBA{R: 138, G: 43, B: 226, A: 200}
+    putih       = color.White
+    hitam       = color.NRGBA{R: 20, G: 20, B: 20, A: 255}
+    currentPath = "/storage/emulated/0"
 )
 
 func main() {
-	a := app.New()
-	w := a.NewWindow("OmniFilePro")
-	w.Resize(fyne.NewSize(400, 700))
+    a := app.New()
+    w := a.NewWindow("OmniFilePro")
+    w.Resize(fyne.NewSize(400, 700))
 
-	splashBg := canvas.NewRectangle(kuningOmni)
-	splashText := canvas.NewText("OmniFilePro", hitam)
-	splashText.TextSize = 24
-	splashText.TextStyle = fyne.TextStyle{Bold: true}
-	w.SetContent(container.NewStack(splashBg, container.NewCenter(splashText)))
+    // Splash Screen
+    splashBg := canvas.NewRectangle(kuningOmni)
+    splashText := canvas.NewText("OmniFilePro", hitam)
+    splashText.TextSize = 24
+    splashText.TextStyle = fyne.TextStyle{Bold: true}
+    
+    w.SetContent(container.NewStack(
+        splashBg, 
+        container.NewCenter(splashText),
+    ))
 
-	go func() {
-		time.Sleep(2 * time.Second)
-		dialog.ShowConfirm("Izin Diperlukan", "OmniFilePro butuh akses penyimpanan. Izinkan?",
-			func(ok bool) {
-				if!ok {
-					a.Quit()
-				} else {
-					w.SetContent(makeMainUI(w))
-				}
-			}, w)
-	}()
+    go func() {
+        time.Sleep(1 * time.Second)
+        cekIzinDanMasuk(w)
+    }()
 
-	w.ShowAndRun()
+    w.ShowAndRun()
+}
+
+// Cek izin storage, kalau deny -> lempar ke Settings
+func cekIzinDanMasuk(w fyne.Window) {
+    _, err := os.ReadDir(currentPath)
+    if err != nil && os.IsPermission(err) {
+        dialog.ShowConfirm("Izin Belum Lengkap",
+            "Android 11+ butuh 'Akses semua file'.\n\nPencet OK untuk buka Settings, lalu nyalakan izin untuk OmniFilePro.",
+            func(ok bool) {
+                if ok && runtime.GOOS == "android" {
+                    _ = exec.Command("am", "start",
+                        "-a", "android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION").Run()
+                }
+                w.SetContent(makeMainUI(w))
+            }, w)
+        return
+    }
+    w.SetContent(makeMainUI(w))
 }
 
 func makeMainUI(w fyne.Window) fyne.CanvasObject {
-	bgPutih := canvas.NewRectangle(putih)
+    bgPutih := canvas.NewRectangle(putih)
 
-	// ===== HEADER KUNING + TOMBOL DRAWER =====
-	headerKuning := canvas.NewRectangle(kuningOmni)
-	headerText := canvas.NewText("OmniFilePro", hitam)
-	headerText.TextStyle = fyne.TextStyle{Bold: true}
-	
-	sidebarOpen := true
-	
-	// ===== SIDEBAR DRAWER GRADASI UNGU =====
-	gradasiUngu := canvas.NewVerticalGradient(unguTua, unguMuda)
-	gradasiUngu.Resize(fyne.NewSize(200, 700))
+    // ===== HEADER GRADIENT KUNING =====
+    headerGradient := canvas.NewLinearGradient(kuningOmni, kuningTua, 90)
+    headerGradient.SetMinSize(fyne.NewSize(400, 80))
 
-	buatLabelItem := func(teks string) *fyne.Container {
-		txt := canvas.NewText(teks, putih)
-		txt.TextSize = 14
-		return container.NewHBox(layout.NewSpacer(), txt, layout.NewSpacer())
-	}
+    title := canvas.NewText("OmniFilePro", hitam)
+    title.TextStyle = fyne.TextStyle{Bold: true}
+    title.TextSize = 20
 
-	sidebarContent := container.NewVBox(
-		buatLabelItem("MENU"),
-		widget.NewSeparator(),
-		widget.NewButtonWithIcon("Internal", theme.FolderIcon(), func() {
-			currentPath = "/storage/emulated/0"
-			w.SetContent(makeMainUI(w)) // Refresh ke root
-		}),
-		widget.NewButtonWithIcon("Download", theme.DownloadIcon(), func() {
-			currentPath = "/storage/emulated/0/Download"
-			w.SetContent(makeMainUI(w))
-		}),
-		layout.NewSpacer(),
-		widget.NewButtonWithIcon("Pengaturan", theme.SettingsIcon(), func() {}),
-	)
-	
-	sidebar := container.NewStack(gradasiUngu, container.NewPadded(sidebarContent))
-	sidebar.Resize(fyne.NewSize(200, 700))
+    // Tombol refresh izin
+    refreshBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+        cekIzinDanMasuk(w)
+    })
 
-	// ===== EXPLORER YANG BISA BUKA FOLDER =====
-	var fileData []string
-	var fileIsDir []bool // Nandain mana folder mana file
-	
-	files, err := os.ReadDir(currentPath)
-	if err!= nil {
-		fileData = []string{"Error: " + err.Error()}
-		fileIsDir = []bool{false}
-	} else {
-		// Tambahin tombol ".." buat back kecuali di root
-		if currentPath!= "/storage/emulated/0" {
-			fileData = append(fileData, "📁..")
-			fileIsDir = append(fileIsDir, true)
-		}
-		for _, f := range files {
-			if f.IsDir() {
-				fileData = append(fileData, "📁 "+f.Name())
-				fileIsDir = append(fileIsDir, true)
-			} else {
-				fileData = append(fileData, "📄 "+f.Name())
-				fileIsDir = append(fileIsDir, false)
-			}
-		}
-	}
+    // Variabel kontrol sidebar
+    var sidebar *fyne.Container
+    var overlay *fyne.Container
+    sidebarOpen := false
 
-	pathLabel := canvas.NewText(currentPath, hitam)
-	pathLabel.TextSize = 12
+    // ===== EXPLORER DATA =====
+    fileData, fileIsDir := loadDirectoryData()
 
-	fileList := widget.NewList(
-		func() int { return len(fileData) },
-		func() fyne.CanvasObject { return canvas.NewText("template", hitam) },
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*canvas.Text).Text = fileData[i]
-			o.Refresh()
-		})
-	
-	// INI LOGIKA BUKA FOLDERNYA BOS
-	fileList.OnSelected = func(id widget.ListItemID) {
-		fileList.Unselect(id) // Biar gak nge-select biru
-		
-		if fileIsDir[id] {
-			selectedName := fileData[id][3:] // Buang emoji "📁 "
-			if selectedName == ".." {
-				// Kalo pencet ".." = balik ke folder parent
-				currentPath = filepath.Dir(currentPath)
-			} else {
-				// Kalo folder biasa = masuk ke dalem
-				currentPath = filepath.Join(currentPath, selectedName)
-			}
-			w.SetContent(makeMainUI(w)) // Refresh UI pake path baru
-		} else {
-			dialog.ShowInformation("File", "Buka file "+fileData[id]+" belum jadi", w)
-		}
-	}
+    pathLabel := canvas.NewText("Path: "+currentPath, hitam)
+    pathLabel.TextSize = 11
 
-	judulExplorer := canvas.NewText("Explorer", hitam)
-	judulExplorer.TextStyle = fyne.TextStyle{Bold: true}
-	explorerTab := container.NewBorder(
-		container.NewVBox(judulExplorer, pathLabel), nil, nil, nil, fileList,
-	)
+    fileList := widget.NewList(
+        func() int { return len(fileData) },
+        func() fyne.CanvasObject {
+            return canvas.NewText("item", hitam)
+        },
+        func(i widget.ListItemID, o fyne.CanvasObject) {
+            t := o.(*canvas.Text)
+            t.Text = fileData[i]
+            t.Refresh()
+        },
+    )
 
-	// ===== TAB LAINNYA =====
-	judulKompres := canvas.NewText("Pengaturan Kompres", hitam)
-	judulKompres.TextStyle = fyne.TextStyle{Bold: true}
-	kompresTab := container.NewVBox(judulKompres, widget.NewCheck("Aktifkan Fitur Kompres", func(on bool) {}))
+    fileList.OnSelected = func(id widget.ListItemID) {
+        fileList.Unselect(id)
+        if id >= len(fileIsDir) {
+            return
+        }
+        if !fileIsDir[id] {
+            return
+        }
+        
+        selectedName := fileData[id]
+        if len(selectedName) > 3 && (selectedName[:3] == "📁 " || selectedName[:3] == "📄 ") {
+            selectedName = selectedName[3:]
+        }
+        
+        if selectedName == ".." {
+            currentPath = filepath.Dir(currentPath)
+        } else {
+            currentPath = filepath.Join(currentPath, selectedName)
+        }
+        w.SetContent(makeMainUI(w))
+    }
 
-	mainTabs := container.NewAppTabs(
-		container.NewTabItemWithIcon("Explorer", theme.FolderOpenIcon(), explorerTab),
-		container.NewTabItemWithIcon("Kompres", theme.FileImageIcon(), kompresTab),
-	)
+    judulExplorer := canvas.NewText("Explorer", hitam)
+    judulExplorer.TextStyle = fyne.TextStyle{Bold: true}
 
-	// ===== DRAWER BUTTON =====
-	kontenArea := container.NewStack(mainTabs)
-	
-	drawerBtn := widget.NewButtonWithIcon("", theme.MenuIcon(), func() {
-		if sidebarOpen {
-			sidebar.Hide()
-			sidebarOpen = false
-		} else {
-			sidebar.Show()
-			sidebarOpen = true
-		}
-	})
+    explorerTab := container.NewBorder(
+        container.NewVBox(judulExplorer, pathLabel),
+        nil, nil, nil,
+        fileList,
+    )
 
-	header := container.NewStack(
-		headerKuning,
-		container.NewBorder(nil, nil, container.NewPadded(drawerBtn), nil, container.NewCenter(headerText)),
-	)
+    // ===== MENU HOME =====
+    menuGrid := makeHomeIconGrid(w)
 
-	ui := container.NewStack(
-		bgPutih,
-		container.NewBorder(header, nil, sidebar, nil, kontenArea),
-	)
+    mainTabs := container.NewAppTabs(
+        container.NewTabItemWithIcon("Home", theme.HomeIcon(), menuGrid),
+        container.NewTabItemWithIcon("Explorer", theme.FolderOpenIcon(), explorerTab),
+    )
 
-	return ui
+    contentArea := container.NewStack(mainTabs)
+
+    // ===== SIDEBAR =====
+    sideGradient := canvas.NewLinearGradient(unguTua, unguMuda, 0)
+    sideGradient.SetMinSize(fyne.NewSize(220, 700))
+
+    sideButtons := container.NewVBox(
+        widget.NewButtonWithIcon("Internal", theme.FolderIcon(), func() {
+            currentPath = "/storage/emulated/0"
+            w.SetContent(makeMainUI(w))
+        }),
+        widget.NewButtonWithIcon("Download", theme.DownloadIcon(), func() {
+            currentPath = "/storage/emulated/0/Download"
+            w.SetContent(makeMainUI(w))
+        }),
+        widget.NewButtonWithIcon("DCIM", theme.FileImageIcon(), func() {
+            currentPath = "/storage/emulated/0/DCIM"
+            w.SetContent(makeMainUI(w))
+        }),
+        widget.NewButtonWithIcon("Music", theme.VolumeUpIcon(), func() {
+            currentPath = "/storage/emulated/0/Music"
+            w.SetContent(makeMainUI(w))
+        }),
+        widget.NewButtonWithIcon("Settings", theme.SettingsIcon(), func() {
+            dialog.ShowInformation("Info", "Settings akan segera hadir.", w)
+        }),
+    )
+
+    sidebarInner := container.NewBorder(
+        layout.NewSpacer(), nil, nil, nil,
+        container.NewPadded(sideButtons),
+    )
+
+    sidebar = container.NewStack(sideGradient, sidebarInner)
+    sidebar.Resize(fyne.NewSize(220, 700))
+    sidebar.Hide()
+
+    // ===== OVERLAY =====
+    overlayBg := canvas.NewRectangle(color.NRGBA{0, 0, 0, 0}) // Start transparent
+    overlayBg.Hide()
+
+    overlay = container.NewStack(
+        overlayBg,
+        container.NewHBox(sidebar, layout.NewSpacer()),
+    )
+    overlay.Hide()
+
+    // ===== TOMBOL MENU =====
+    drawerBtn := widget.NewButtonWithIcon("", theme.MenuIcon(), func() {
+        sidebarOpen = !sidebarOpen
+        animateSidebar(sidebarOpen, sidebar, overlayBg, overlay)
+    })
+
+    headerContent := container.NewBorder(
+        nil, nil,
+        container.NewHBox(container.NewPadded(drawerBtn)),
+        container.NewHBox(container.NewPadded(refreshBtn)),
+        container.NewCenter(title),
+    )
+
+    header := container.NewStack(headerGradient, headerContent)
+
+    // ROOT LAYOUT
+    root := container.NewStack(
+        bgPutih,
+        container.NewBorder(header, nil, nil, nil, contentArea),
+        overlay,
+    )
+
+    return root
+}
+
+func animateSidebar(open bool, sidebar *fyne.Container, overlayBg *canvas.Rectangle, overlay *fyne.Container) {
+    if open {
+        overlay.Show()
+        overlayBg.Show()
+        sidebar.Show()
+    }
+
+    anim := fyne.NewAnimation(time.Millisecond*200, func(f float32) {
+        if !open {
+            f = 1 - f
+        }
+        overlayBg.FillColor = color.NRGBA{0, 0, 0, uint8(100 * f)}
+        overlayBg.Refresh()
+    })
+    
+    anim.Curve = fyne.AnimationEaseInOut
+    anim.SetOnCompleted(func() {
+        if !open {
+            overlay.Hide()
+            overlayBg.Hide()
+            sidebar.Hide()
+        }
+    })
+    anim.Start()
+}
+
+func loadDirectoryData() ([]string, []bool) {
+    var fileData []string
+    var fileIsDir []bool
+
+    files, err := os.ReadDir(currentPath)
+    if err != nil {
+        fileData = []string{
+            "ERROR: " + err.Error(),
+            "",
+            "Cara benerin:",
+            "1. Pencet tombol refresh ↻ di kanan atas",
+            "2. Nyalain 'Akses semua file'",
+            "3. Balik ke app",
+        }
+        fileIsDir = make([]bool, len(fileData))
+        return fileData, fileIsDir
+    }
+
+    if currentPath != "/storage/emulated/0" {
+        fileData = append(fileData, "📁 ..")
+        fileIsDir = append(fileIsDir, true)
+    }
+
+    if len(files) == 0 {
+        fileData = append(fileData, "(Folder ini kosong)")
+        fileIsDir = append(fileIsDir, false)
+    }
+
+    for _, f := range files {
+        if f.IsDir() {
+            fileData = append(fileData, "📁 "+f.Name())
+            fileIsDir = append(fileIsDir, true)
+        } else {
+            fileData = append(fileData, "📄 "+f.Name())
+            fileIsDir = append(fileIsDir, false)
+        }
+    }
+    return fileData, fileIsDir
+}
+
+func makeHomeIconGrid(w fyne.Window) fyne.CanvasObject {
+    type menuItem struct {
+        icon fyne.Resource
+        text string
+        path string
+    }
+    items := []menuItem{
+        {theme.HomeIcon(), "Internal", "/storage/emulated/0"},
+        {theme.FolderIcon(), "Download", "/storage/emulated/0/Download"},
+        {theme.FileImageIcon(), "DCIM", "/storage/emulated/0/DCIM"},
+        {theme.VolumeUpIcon(), "Music", "/storage/emulated/0/Music"},
+        {theme.SettingsIcon(), "Settings", ""},
+    }
+
+    var buttons []fyne.CanvasObject
+    for _, m := range items {
+        m := m
+        btn := widget.NewButtonWithIcon(m.text, m.icon, func() {
+            if m.path != "" {
+                currentPath = m.path
+                w.SetContent(makeMainUI(w))
+            } else {
+                dialog.ShowInformation("Settings", "Belum diimplementasi.", w)
+            }
+        })
+        btn.Importance = widget.HighImportance
+        buttons = append(buttons, btn)
+    }
+    
+    grid := container.NewGridWithColumns(3, buttons...)
+    return container.NewCenter(grid)
 }
