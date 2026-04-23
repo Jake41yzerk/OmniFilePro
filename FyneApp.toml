@@ -1,18 +1,18 @@
 [Details]
-Name = "OmniFilePro"
-ID = "com.mahajake.omnifilepro"
+Name    = "OmniFilePro"
+ID      = "com.mahajake.omnifilepro"
 Version = "1.0.0"
-Build = 1
-Icon = "Icon.png"
+Build   = 1
+Icon    = "Icon.png"
 
 [[permission]]
-Name = "android.permission.READ_EXTERNAL_STORAGE"
-Reason = "Baca file"
+Name   = "android.permission.READ_EXTERNAL_STORAGE"
+Reason = "Baca file di penyimpanan bersama pengguna"
 
 [[permission]]
-Name = "android.permission.WRITE_EXTERNAL_STORAGE"
-Reason = "Simpan file"
+Name   = "android.permission.WRITE_EXTERNAL_STORAGE"
+Reason = "Menyimpan dan menghapus file di penyimpanan bersama pengguna"
 
 [[permission]]
-Name = "android.permission.MANAGE_EXTERNAL_STORAGE"
-Reason = "Akses Internal Storage Android 11+"
+Name   = "android.permission.MANAGE_EXTERNAL_STORAGE"
+Reason = "Akses penuh internal storage untuk fungsi utama pengelola berkas"
