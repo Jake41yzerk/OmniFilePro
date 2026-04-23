@@ -12,7 +12,6 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -64,7 +63,6 @@ func cekIzinDanMasuk(w fyne.Window) {
 func makeMainUI(w fyne.Window) fyne.CanvasObject {
 	bgPutih := canvas.NewRectangle(putih)
 
-	// ===== HEADER + TOMBOL REFRESH =====
 	headerKuning := canvas.NewRectangle(kuningOmni)
 	headerText := canvas.NewText("OmniFilePro", hitam)
 	headerText.TextStyle = fyne.TextStyle{Bold: true}
@@ -100,7 +98,6 @@ func makeMainUI(w fyne.Window) fyne.CanvasObject {
 	sidebar := container.NewStack(gradasiUngu, container.NewPadded(sidebarContent))
 	sidebar.Resize(fyne.NewSize(200, 700))
 
-	// ===== EXPLORER =====
 	var fileData []string
 	var fileIsDir []bool
 	
@@ -110,7 +107,7 @@ func makeMainUI(w fyne.Window) fyne.CanvasObject {
 			"ERROR: " + err.Error(),
 			"",
 			"Cara benerin:",
-			"1. Pencet tombol Settings di sidebar",
+			"1. Pencet 'Buka Settings Izin' di sidebar",
 			"2. Nyalain 'Akses semua file'",
 			"3. Pencet tombol refresh ↻",
 		}
